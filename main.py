@@ -46,15 +46,20 @@ TOKEN = get_env("DISCORD_BOT_TOKEN", "TOKEN", required=True)
 # =========================
 PAVOS_EMOJI = get_env("PAVOS_EMOJI", default="<:Pavos:1440841778373722213>")
 
-# ── EMOJIS CUSTOM PARA VENTAS (se resuelven dinamicamente en on_ready) ──
-_EMOJI_IDS = {
-    "PIXEL_HEART_EMOJI": 1492970144534626344,
-    "BLUE_ARROW_EMOJI":  1491952877009113190,
-    "SALE_FOOTER_EMOJI": 1475558300941684798,
-}
-PIXEL_HEART_EMOJI = "<a:pixelheart:1492970144534626344>"  # fallback
-BLUE_ARROW_EMOJI  = "<a:bluearrow:1491952877009113190>"   # fallback
-SALE_FOOTER_EMOJI = "<:LOGO:1475558300941684798>"         # fallback (estatico)
+# ── EMOJIS CUSTOM PARA VENTAS ──
+# Se resuelven en tiempo de ejecucion via bot.get_emoji() para garantizar
+# el formato correcto (animado vs estatico).
+_BLUE_ARROW_ID  = 1491952877009113190
+_PIXEL_HEART_ID = 1492970144534626344
+_SALE_FOOTER_ID = 1475558300941684798
+
+def _get_emoji(emoji_id: int) -> str:
+    """Resuelve un emoji por ID desde el cache del bot. Nunca falla."""
+    e = bot.get_emoji(emoji_id)
+    if e:
+        prefix = "a:" if e.animated else ""
+        return f"<{prefix}{e.name}:{e.id}>"
+    return f"<:emoji:{emoji_id}>"
 
 # ── ADJETIVOS ALEATORIOS PARA VENTAS ──
 SALE_ADJECTIVES = [
@@ -509,29 +514,8 @@ class ConsultaProductoView(discord.ui.View):
 # =========================
 # READY
 # =========================
-def _fmt_emoji(e: discord.Emoji) -> str:
-    prefix = "a:" if e.animated else ""
-    return f"<{prefix}{e.name}:{e.id}>"
-
 @bot.event
 async def on_ready():
-    global PIXEL_HEART_EMOJI, BLUE_ARROW_EMOJI, SALE_FOOTER_EMOJI
-    # Resolver emojis por ID desde todos los servidores del bot
-    all_emojis = {e.id: e for guild in bot.guilds for e in guild.emojis}
-    for var, eid in _EMOJI_IDS.items():
-        emoji = all_emojis.get(eid)
-        if emoji:
-            fmt = _fmt_emoji(emoji)
-            if var == "PIXEL_HEART_EMOJI":
-                PIXEL_HEART_EMOJI = fmt
-            elif var == "BLUE_ARROW_EMOJI":
-                BLUE_ARROW_EMOJI = fmt
-            elif var == "SALE_FOOTER_EMOJI":
-                SALE_FOOTER_EMOJI = fmt
-            print(f"[Emoji] {var} resuelto: {fmt}")
-        else:
-            print(f"[Emoji] ADVERTENCIA: no se encontro el emoji ID {eid} para {var}")
-
     bot.add_view(ConsultaProductoView())
     bot.add_view(PreciosProductView())
     for pk in FULL_PRICE_CATALOG:
@@ -1645,11 +1629,14 @@ def _build_sale_message(inv: dict) -> str:
     # Adjetivo aleatorio
     adjective = random.choice(SALE_ADJECTIVES)
 
-    # Mensaje final
+    # Mensaje final — emojis resueltos en tiempo de ejecucion
+    arrow  = _get_emoji(_BLUE_ARROW_ID)
+    heart  = _get_emoji(_PIXEL_HEART_ID)
+    footer = _get_emoji(_SALE_FOOTER_ID)
     message = (
-        f"{BLUE_ARROW_EMOJI} Un **{adjective}** {PIXEL_HEART_EMOJI} "
+        f"{arrow} Un **{adjective}** {heart} "
         f"acaba de comprar {product_text} usando **{gateway}**. "
-        f"Gracias por confiar en **{SHOP_NAME}** {SALE_FOOTER_EMOJI}"
+        f"Gracias por confiar en **{SHOP_NAME}** {footer}"
     )
 
     return message
