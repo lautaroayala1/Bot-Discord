@@ -2317,105 +2317,35 @@ async def restock_poll_task():
         return
 
     for item in restocked:
-        # ── Formateo de precio ──
-        try:
-            price_fmt = f"{float(item['price']):.2f} {item['currency']}" if item['price'] is not None else "Ver tienda"
-        except Exception:
-            price_fmt = f"{item['price']} {item['currency']}" if item['price'] else "Ver tienda"
-
         is_new = item.get("is_new", False)
 
-        # ── Emojis del servidor (solo para content y description) ──
-        ea = _pick_server_emoji(_restock_emoji_counter)          # animado
-        es = _pick_server_emoji_static(_restock_emoji_counter)   # estático
-        _restock_emoji_counter += 1
+        # Emojis del servidor — igual que ventas-logs usa _BLUE_ARROW_ID y _PIXEL_HEART_ID
+        arrow = _get_emoji(_BLUE_ARROW_ID)
+        heart = _get_emoji(_PIXEL_HEART_ID)
 
-        # ── Emoji Unicode contextual según tipo de producto ──
-        prod_emoji = _get_product_emoji(item["name"])
-
-        # ── Color del embed ──
-        embed_color = (
-            discord.Color.from_rgb(0, 255, 180)   # Verde neón — nuevo producto
-            if is_new else
-            discord.Color.from_rgb(25, 181, 255)  # Celeste — restock
-        )
-
-        # ── Título limpio (sin emojis custom — Discord no los renderiza en titles) ──
+        # Texto de la línea — misma estructura que ventas-logs
         if is_new:
-            embed_title = f"{prod_emoji} {item['name']} — NEW PRODUCT"
+            line = (
+                f"{arrow} **NUEVO PRODUCTO** {heart} "
+                f"**{item['name']}** acaba de llegar a la tienda. "
+                f"¡Conseguilo en **{SHOP_NAME}**!"
+            )
         else:
-            embed_title = f"{prod_emoji} {item['name']} — RESTOCKED"
+            line = (
+                f"{arrow} **RESTOCK** {heart} "
+                f"**{item['name']}** acaba de ser restockeado. "
+                f"¡Conseguilo antes de que se agote en **{SHOP_NAME}**!"
+            )
 
-        # ── Descripción con emojis custom (sí se renderizan aquí) ──
-        if is_new:
-            info_line = f"{ea} We just added this product to our store!" if ea else "We just added this product to our store!"
-        else:
-            info_line = f"{ea} We have recently restocked this product!" if ea else "We have recently restocked this product!"
-
-        # ── Fields ──
-        stock_val = item["stock"]
-        if stock_val >= 50:
-            stock_bar = "🟢🟢🟢🟢🟢"
-        elif stock_val >= 20:
-            stock_bar = "🟡🟡🟡🟡⬛"
-        elif stock_val >= 5:
-            stock_bar = "🟠🟠🟠⬛⬛"
-        else:
-            stock_bar = "🔴🔴⬛⬛⬛"
-
+        # Embed minimalista con la imagen — igual que ventas-logs pero con imagen grande
         embed = discord.Embed(
-            title=embed_title,
-            color=embed_color,
-            timestamp=datetime.now(timezone.utc),
+            description=line,
+            color=SALES_EMBED_COLOR,
         )
-
-        # Service
-        embed.add_field(name="📦 Service", value=item["name"], inline=False)
-
-        # Info
-        embed.add_field(name="ℹ️ Information", value=info_line, inline=False)
-
-        # Stock + Precio (inline)
-        embed.add_field(
-            name="📊 Available stock",
-            value=f"{stock_bar}\n**{stock_val}**",
-            inline=True,
-        )
-        embed.add_field(
-            name="💰 Price",
-            value=f"**{price_fmt}**",
-            inline=True,
-        )
-
-        # ── Imagen del producto ──
         if item["image_url"]:
             embed.set_image(url=item["image_url"])
 
-        # ── Footer ──
-        footer_text = f"{SHOP_NAME} · Stock Notifications"
-        if bot.user and bot.user.display_avatar:
-            embed.set_footer(text=footer_text, icon_url=bot.user.display_avatar.url)
-        else:
-            embed.set_footer(text=footer_text)
-
-        # ── Content del mensaje: @everyone + línea estilo ventas-logs ──
-        # Emojis custom van aquí (sí se renderizan en el content)
-        if is_new:
-            action_text = "acaba de llegar a la tienda"
-            tag_text    = "NUEVO PRODUCTO"
-        else:
-            action_text = "acaba de ser restockeado"
-            tag_text    = "RESTOCK"
-
-        arrow_part = f"{es} " if es else "➡️ "
-        heart_part = f" {ea}" if ea else ""
-        content_msg = (
-            f"{arrow_part}**{tag_text}**{heart_part} "
-            f"**{item['name']}** {action_text}. "
-            f"¡Conseguilo antes de que se agote en **{SHOP_NAME}**!"
-        )
-
-        # ── Botón ──
+        # Botón
         view = discord.ui.View()
         view.add_item(
             discord.ui.Button(
@@ -2427,7 +2357,7 @@ async def restock_poll_task():
 
         try:
             await channel.send(
-                content=f"@everyone\n{content_msg}",
+                content="@everyone",
                 embed=embed,
                 view=view,
             )
