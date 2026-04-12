@@ -46,9 +46,10 @@ TOKEN = get_env("DISCORD_BOT_TOKEN", "TOKEN", required=True)
 # =========================
 PAVOS_EMOJI = get_env("PAVOS_EMOJI", default="<:Pavos:1440841778373722213>")
 
-# ── EMOJIS CUSTOM PARA VENTAS (reemplazá los IDs por los reales) ──
-PIXEL_HEART_EMOJI = get_env("PIXEL_HEART_EMOJI", default="<a:pixelheart:0000000000000000000>")
-BLUE_ARROW_EMOJI = get_env("BLUE_ARROW_EMOJI", default="<a:bluearrow:0000000000000000000>")
+# ── EMOJIS CUSTOM PARA VENTAS (hardcodeados) ──
+PIXEL_HEART_EMOJI = "<a:pixelheart:1492970144534626344>"
+BLUE_ARROW_EMOJI = "<a:bluearrow:1491952877009113190>"
+SALE_FOOTER_EMOJI = "<a:pixelheart:1475558300941684798>"
 
 # ── ADJETIVOS ALEATORIOS PARA VENTAS ──
 SALE_ADJECTIVES = [
@@ -1570,12 +1571,11 @@ async def sellauth_request(method: str, endpoint: str, **kwargs):
         return None
 
 # ================================================================
-# SELLAUTH — LOG DE VENTAS (NUEVO ESTILO rm-sells)
+# SELLAUTH — LOG DE VENTAS (ESTILO rm-sells)
 # ================================================================
 def _build_sale_message(inv: dict) -> str:
     """
-    Construye el mensaje de venta estilo rm-sells:
-    » Un Genio 💚 acaba de comprar 1x Producto usando Litecoin. Gracias por confiar en VortexGGShop 💙
+    Construye el mensaje de venta estilo rm-sells.
     """
     # Extraer productos
     items = inv.get("items") or []
@@ -1586,24 +1586,24 @@ def _build_sale_message(inv: dict) -> str:
             v_name = (it.get("variant") or {}).get("name", "")
             qty = it.get("quantity") or it.get("amount") or 1
             if p_name and v_name:
-                full_name = f"**{p_name} ({v_name})**"
+                full_name = f"{p_name} ({v_name})"
             elif p_name:
-                full_name = f"**{p_name}**"
+                full_name = p_name
             else:
-                full_name = "**Producto**"
+                full_name = "Producto"
 
             if int(qty) > 1:
-                product_parts.append(f"**{qty}x** {full_name}")
+                product_parts.append(f"**{qty}x {full_name}**")
             else:
-                product_parts.append(f"**1x** {full_name}")
+                product_parts.append(f"**1x {full_name}**")
         product_text = ", ".join(product_parts)
     else:
         product_name = inv.get("product_name") or "Producto"
         quantity = inv.get("amount") or 1
         if int(quantity) > 1:
-            product_text = f"**{quantity}x** **{product_name}**"
+            product_text = f"**{quantity}x {product_name}**"
         else:
-            product_text = f"**1x** **{product_name}**"
+            product_text = f"**1x {product_name}**"
 
     # Método de pago
     gateway = inv.get("gateway") or ""
@@ -1619,11 +1619,11 @@ def _build_sale_message(inv: dict) -> str:
     # Adjetivo aleatorio
     adjective = random.choice(SALE_ADJECTIVES)
 
-    # Armar mensaje final
+    # Mensaje final
     message = (
         f"{BLUE_ARROW_EMOJI} Un **{adjective}** {PIXEL_HEART_EMOJI} "
         f"acaba de comprar {product_text} usando **{gateway}**. "
-        f"Gracias por confiar en **{SHOP_NAME}** {BLUE_ARROW_EMOJI}"
+        f"Gracias por confiar en **{SHOP_NAME}** {SALE_FOOTER_EMOJI}"
     )
 
     return message
@@ -1695,11 +1695,10 @@ async def sales_log_task():
     if log_channel is None:
         return
 
-    # ── ENVIAR CADA VENTA COMO EMBED CON BARRA LATERAL (estilo rm-sells) ──
+    # Enviar cada venta como embed minimalista con barra de color
     for inv in new_sales:
         sale_text = _build_sale_message(inv)
 
-        # Usamos un embed minimalista con solo description para la barra de color
         embed = discord.Embed(
             description=sale_text,
             color=SALES_EMBED_COLOR,
@@ -2306,8 +2305,6 @@ print("VOUCHES_CHANNEL_ID:", VOUCHES_CHANNEL_ID)
 print("SALES_LOG_CHANNEL_NAME:", SALES_LOG_CHANNEL_NAME)
 print("RESTOCK_CHANNEL_NAME:", RESTOCK_CHANNEL_NAME)
 print("RESTOCK_POLL_MINUTES:", RESTOCK_POLL_MINUTES)
-print("PIXEL_HEART_EMOJI:", PIXEL_HEART_EMOJI)
-print("BLUE_ARROW_EMOJI:", BLUE_ARROW_EMOJI)
 print("SHOP_NAME:", SHOP_NAME)
 
 bot.run(TOKEN)
