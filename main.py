@@ -46,10 +46,15 @@ TOKEN = get_env("DISCORD_BOT_TOKEN", "TOKEN", required=True)
 # =========================
 PAVOS_EMOJI = get_env("PAVOS_EMOJI", default="<:Pavos:1440841778373722213>")
 
-# ── EMOJIS CUSTOM PARA VENTAS (hardcodeados) ──
-PIXEL_HEART_EMOJI = "<a:pixelheart:1492970144534626344>"
-BLUE_ARROW_EMOJI = "<a:bluearrow:1491952877009113190>"
-SALE_FOOTER_EMOJI = "<a:LOGO:1475558300941684798>"
+# ── EMOJIS CUSTOM PARA VENTAS (se resuelven dinamicamente en on_ready) ──
+_EMOJI_IDS = {
+    "PIXEL_HEART_EMOJI": 1492970144534626344,
+    "BLUE_ARROW_EMOJI":  1491952877009113190,
+    "SALE_FOOTER_EMOJI": 1475558300941684798,
+}
+PIXEL_HEART_EMOJI = "<a:pixelheart:1492970144534626344>"  # fallback
+BLUE_ARROW_EMOJI  = "<a:bluearrow:1491952877009113190>"   # fallback
+SALE_FOOTER_EMOJI = "<:LOGO:1475558300941684798>"         # fallback (estatico)
 
 # ── ADJETIVOS ALEATORIOS PARA VENTAS ──
 SALE_ADJECTIVES = [
@@ -504,8 +509,29 @@ class ConsultaProductoView(discord.ui.View):
 # =========================
 # READY
 # =========================
+def _fmt_emoji(e: discord.Emoji) -> str:
+    prefix = "a:" if e.animated else ""
+    return f"<{prefix}{e.name}:{e.id}>"
+
 @bot.event
 async def on_ready():
+    global PIXEL_HEART_EMOJI, BLUE_ARROW_EMOJI, SALE_FOOTER_EMOJI
+    # Resolver emojis por ID desde todos los servidores del bot
+    all_emojis = {e.id: e for guild in bot.guilds for e in guild.emojis}
+    for var, eid in _EMOJI_IDS.items():
+        emoji = all_emojis.get(eid)
+        if emoji:
+            fmt = _fmt_emoji(emoji)
+            if var == "PIXEL_HEART_EMOJI":
+                PIXEL_HEART_EMOJI = fmt
+            elif var == "BLUE_ARROW_EMOJI":
+                BLUE_ARROW_EMOJI = fmt
+            elif var == "SALE_FOOTER_EMOJI":
+                SALE_FOOTER_EMOJI = fmt
+            print(f"[Emoji] {var} resuelto: {fmt}")
+        else:
+            print(f"[Emoji] ADVERTENCIA: no se encontro el emoji ID {eid} para {var}")
+
     bot.add_view(ConsultaProductoView())
     bot.add_view(PreciosProductView())
     for pk in FULL_PRICE_CATALOG:
