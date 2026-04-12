@@ -49,7 +49,7 @@ PAVOS_EMOJI = get_env("PAVOS_EMOJI", default="<:Pavos:1440841778373722213>")
 # ── EMOJIS CUSTOM PARA VENTAS (hardcodeados) ──
 PIXEL_HEART_EMOJI = "<a:pixelheart:1492970144534626344>"
 BLUE_ARROW_EMOJI = "<a:bluearrow:1491952877009113190>"
-SALE_FOOTER_EMOJI = "<a:pixelheart:1475558300941684798>"
+SALE_FOOTER_EMOJI = "<a:LOGO:1475558300941684798>"
 
 # ── ADJETIVOS ALEATORIOS PARA VENTAS ──
 SALE_ADJECTIVES = [
@@ -65,8 +65,8 @@ SALE_ADJECTIVES = [
 # =========================
 EMBED_COLOR = discord.Color.from_rgb(25, 181, 255)  # #19B5FF
 
-# Color para el embed de ventas (morado como rm-sells)
-SALES_EMBED_COLOR = discord.Color.from_rgb(155, 89, 182)
+# Color para el embed de ventas (celeste neón)
+SALES_EMBED_COLOR = discord.Color.from_rgb(0, 245, 255)
 
 # =========================
 # LINKS / CANALES
