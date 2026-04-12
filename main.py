@@ -1632,11 +1632,10 @@ def _build_sale_message(inv: dict) -> str:
     # Mensaje final — emojis resueltos en tiempo de ejecucion
     arrow  = _get_emoji(_BLUE_ARROW_ID)
     heart  = _get_emoji(_PIXEL_HEART_ID)
-    footer = _get_emoji(_SALE_FOOTER_ID)
     message = (
         f"{arrow} Un **{adjective}** {heart} "
         f"acaba de comprar {product_text} usando **{gateway}**. "
-        f"Gracias por confiar en **{SHOP_NAME}** {footer}"
+        f"Gracias por confiar en **{SHOP_NAME}**"
     )
 
     return message
