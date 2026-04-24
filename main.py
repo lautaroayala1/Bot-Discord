@@ -2393,6 +2393,285 @@ async def setuprestock(interaction: discord.Interaction):
     await interaction.followup.send(embed=embed, ephemeral=True)
 
 
+# ================================================================
+# SISTEMA DE REFERIDOS
+# ================================================================
+REFERIDOS_FILE = Path("referidos.json")
+if not REFERIDOS_FILE.exists():
+    REFERIDOS_FILE.write_text(json.dumps({}, indent=2), encoding="utf-8")
+
+def load_referidos() -> dict:
+    """
+    Estructura:
+    {
+      "comprador_id": {
+          "referido_por": "invitador_id",
+          "fecha": "2025-01-01 18:00:00",
+          "pagado": false
+      },
+      ...
+    }
+    """
+    try:
+        return json.loads(REFERIDOS_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+def save_referidos(data: dict):
+    REFERIDOS_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+
+# ================================================================
+# /referido — El comprador registra quién lo invitó
+# ================================================================
+@bot.tree.command(
+    name="referido",
+    description="Registrá quién te invitó al servidor antes de comprar"
+)
+@discord.app_commands.describe(
+    invitador="El usuario que te invitó al servidor (@mención)"
+)
+async def referido(
+    interaction: discord.Interaction,
+    invitador: discord.Member,
+):
+    await interaction.response.defer(ephemeral=True)
+
+    comprador_id = str(interaction.user.id)
+    invitador_id = str(invitador.id)
+
+    # No puede referirse a sí mismo
+    if comprador_id == invitador_id:
+        return await interaction.followup.send(
+            "⛔ No podés referirte a vos mismo.", ephemeral=True
+        )
+
+    # No puede ser el bot
+    if invitador.bot:
+        return await interaction.followup.send(
+            "⛔ No podés registrar un bot como invitador.", ephemeral=True
+        )
+
+    data = load_referidos()
+
+    # Ya registrado — verificar si ya fue pagado
+    if comprador_id in data:
+        entry = data[comprador_id]
+        prev_inv_id = entry.get("referido_por")
+        try:
+            prev_inv = await bot.fetch_user(int(prev_inv_id))
+            prev_name = str(prev_inv)
+        except Exception:
+            prev_name = f"ID {prev_inv_id}"
+
+        if entry.get("pagado"):
+            return await interaction.followup.send(
+                f"✅ Ya tenés un referido registrado y **ya fue pagado**.\n"
+                f"👤 Invitador: **{prev_name}**",
+                ephemeral=True
+            )
+        else:
+            return await interaction.followup.send(
+                f"⚠️ Ya tenés un referido registrado (pendiente de pago).\n"
+                f"👤 Invitador: **{prev_name}**\n\n"
+                f"Si querés cambiarlo contactá a un Staff.",
+                ephemeral=True
+            )
+
+    # Registrar
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    data[comprador_id] = {
+        "referido_por": invitador_id,
+        "fecha":        now_str,
+        "pagado":       False,
+    }
+    save_referidos(data)
+
+    # Notificar al owner
+    try:
+        owner = await bot.fetch_user(OWNER_ID)
+        notif = discord.Embed(
+            title="🔗 NUEVO REFERIDO REGISTRADO",
+            color=discord.Color.from_rgb(0, 245, 100),
+            timestamp=datetime.now(timezone.utc),
+        )
+        notif.add_field(name="🛍️ Comprador",  value=f"{interaction.user} (`{comprador_id}`)", inline=False)
+        notif.add_field(name="👤 Invitado por", value=f"{invitador} (`{invitador_id}`)",         inline=False)
+        notif.add_field(name="📅 Fecha",        value=now_str,                                   inline=False)
+        notif.add_field(name="💰 Comisión",     value="25% de la venta al efectuarse el pago",   inline=False)
+        notif.set_footer(text="VortexGGShop · Sistema de Referidos")
+        await owner.send(embed=notif)
+    except Exception:
+        pass
+
+    # Confirmar al comprador
+    embed = discord.Embed(
+        title="✅ REFERIDO REGISTRADO",
+        description=(
+            f"Tu referido fue registrado correctamente.\n\n"
+            f"👤 **Invitado por:** {invitador.mention}\n"
+            f"📅 **Fecha:** {now_str}\n\n"
+            f"Cuando realices tu compra, el Staff procesará el pago de la comisión del **25%** "
+            f"a tu invitador automáticamente."
+        ),
+        color=discord.Color.green(),
+        timestamp=datetime.now(timezone.utc),
+    )
+    embed.set_footer(text="VortexGGShop · Sistema de Referidos")
+    await interaction.followup.send(embed=embed, ephemeral=True)
+
+
+# ================================================================
+# /referidos — Panel de referidos (solo Staff/Owner)
+# ================================================================
+@bot.tree.command(
+    name="referidos",
+    description="Muestra el panel de referidos pendientes y pagados (solo Staff)"
+)
+@discord.app_commands.describe(
+    filtro="pendiente = sin pagar | pagado = ya pagados | todos (default)"
+)
+async def referidos_panel(
+    interaction: discord.Interaction,
+    filtro: str = "pendiente",
+):
+    await interaction.response.defer(ephemeral=True)
+
+    if not is_staff_or_owner(interaction):
+        return await interaction.followup.send(
+            "⛔ Solo Staff/Owner puede usar este comando.", ephemeral=True
+        )
+
+    data = load_referidos()
+    if not data:
+        return await interaction.followup.send(
+            "📭 No hay referidos registrados todavía.", ephemeral=True
+        )
+
+    filtro = filtro.strip().lower()
+    items = []
+    for comprador_id, entry in data.items():
+        pagado = entry.get("pagado", False)
+        if filtro == "pendiente" and pagado:
+            continue
+        if filtro == "pagado" and not pagado:
+            continue
+        items.append((comprador_id, entry))
+
+    if not items:
+        return await interaction.followup.send(
+            f"📭 No hay referidos con filtro **{filtro}**.", ephemeral=True
+        )
+
+    embed = discord.Embed(
+        title=f"🔗 PANEL DE REFERIDOS — {filtro.upper()}",
+        color=EMBED_COLOR,
+        timestamp=datetime.now(timezone.utc),
+    )
+
+    lines = []
+    for comprador_id, entry in items[:20]:  # máx 20 para no explotar el embed
+        inv_id  = entry.get("referido_por", "?")
+        fecha   = entry.get("fecha", "?")
+        pagado  = entry.get("pagado", False)
+        estado  = "✅ Pagado" if pagado else "⏳ Pendiente"
+        lines.append(
+            f"**Comprador:** <@{comprador_id}> · **Invitador:** <@{inv_id}>\n"
+            f"   📅 {fecha} · {estado}"
+        )
+
+    embed.description = "\n\n".join(lines)
+
+    if len(items) > 20:
+        embed.set_footer(text=f"Mostrando 20 de {len(items)} · VortexGGShop")
+    else:
+        embed.set_footer(text=f"Total: {len(items)} · VortexGGShop")
+
+    await interaction.followup.send(embed=embed, ephemeral=True)
+
+
+# ================================================================
+# /pagareferido — Marca un referido como pagado (solo Staff/Owner)
+# ================================================================
+@bot.tree.command(
+    name="pagareferido",
+    description="Marca el referido de un comprador como pagado (solo Staff)"
+)
+@discord.app_commands.describe(
+    comprador="El usuario que compró (cuyo referido se marca como pagado)",
+    monto="Monto de la venta en USD (para calcular el 25% automáticamente)",
+)
+async def pagareferido(
+    interaction: discord.Interaction,
+    comprador: discord.Member,
+    monto: float,
+):
+    await interaction.response.defer(ephemeral=True)
+
+    if not is_staff_or_owner(interaction):
+        return await interaction.followup.send(
+            "⛔ Solo Staff/Owner puede usar este comando.", ephemeral=True
+        )
+
+    data = load_referidos()
+    comprador_id = str(comprador.id)
+
+    if comprador_id not in data:
+        return await interaction.followup.send(
+            f"⛔ {comprador.mention} no tiene ningún referido registrado.", ephemeral=True
+        )
+
+    entry = data[comprador_id]
+
+    if entry.get("pagado"):
+        return await interaction.followup.send(
+            f"⚠️ El referido de {comprador.mention} ya estaba marcado como pagado.", ephemeral=True
+        )
+
+    inv_id    = entry.get("referido_por", "?")
+    comision  = round(monto * 0.25, 2)
+
+    # Marcar como pagado
+    entry["pagado"]      = True
+    entry["monto_venta"] = monto
+    entry["comision"]    = comision
+    entry["pagado_en"]   = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    entry["pagado_por"]  = str(interaction.user.id)
+    save_referidos(data)
+
+    # Notificar al invitador por DM
+    try:
+        invitador = await bot.fetch_user(int(inv_id))
+        dm_embed = discord.Embed(
+            title="💰 ¡COMISIÓN POR REFERIDO!",
+            description=(
+                f"¡Hola {invitador.mention}! Alguien que invitaste realizó una compra.\n"
+                f"Te corresponde una comisión del **25%**."
+            ),
+            color=discord.Color.gold(),
+            timestamp=datetime.now(timezone.utc),
+        )
+        dm_embed.add_field(name="🛍️ Comprador",   value=str(comprador),          inline=True)
+        dm_embed.add_field(name="💵 Venta total",  value=f"${monto:.2f} USD",     inline=True)
+        dm_embed.add_field(name="💰 Tu comisión",  value=f"**${comision:.2f} USD**", inline=True)
+        dm_embed.set_footer(text="VortexGGShop · Sistema de Referidos")
+        await invitador.send(embed=dm_embed)
+    except Exception:
+        pass
+
+    # Confirmar al Staff
+    confirm = discord.Embed(
+        title="✅ REFERIDO MARCADO COMO PAGADO",
+        color=discord.Color.green(),
+        timestamp=datetime.now(timezone.utc),
+    )
+    confirm.add_field(name="🛍️ Comprador",     value=comprador.mention,          inline=True)
+    confirm.add_field(name="👤 Invitador",      value=f"<@{inv_id}>",             inline=True)
+    confirm.add_field(name="💵 Venta total",    value=f"${monto:.2f} USD",        inline=True)
+    confirm.add_field(name="💰 Comisión (25%)", value=f"**${comision:.2f} USD**", inline=True)
+    confirm.set_footer(text=f"Procesado por {interaction.user} · VortexGGShop")
+    await interaction.followup.send(embed=confirm, ephemeral=True)
+
+
 # =========================
 # RUN
 # =========================
